@@ -275,6 +275,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
     - name: Check README exists and is not empty
       run: |
         if [ ! -f "wizardai_aws_s3_bucket/README.md" ] || [ ! -s "wizardai_aws_s3_bucket/README.md" ]; then
@@ -307,6 +312,8 @@ jobs:
               cd - > /dev/null
             fi
           done
+        else
+          echo "ℹ️ No examples directory found, skipping example validation"
         fi
 
   size-check:
