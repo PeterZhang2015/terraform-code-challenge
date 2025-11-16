@@ -28,9 +28,9 @@ func TestS3BucketBasic(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "development",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "development",
 			"tags": map[string]string{
 				"Test": "terratest",
 			},
@@ -115,9 +115,9 @@ func TestS3BucketProduction(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/production",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "production",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "production",
 			"tags": map[string]string{
 				"Test":        "terratest",
 				"Environment": "production",
@@ -185,9 +185,9 @@ func TestS3BucketInvalidEnvironment(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "invalid-env", // This should fail validation
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "invalid-env", // This should fail validation
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": awsRegion,
@@ -211,9 +211,9 @@ func TestS3BucketHTTPSEnforcement(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "development",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "development",
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": awsRegion,
