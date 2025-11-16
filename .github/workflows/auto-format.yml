@@ -1,0 +1,206 @@
+name: Auto Format Code
+
+on:
+  pull_request:
+    branches: [ master, main ]
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.6.0"
+  GO_VERSION: "1.21"
+
+jobs:
+  auto-format:
+    name: Auto Format Code
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Check for formatting issues
+      id: check_formatting
+      run: |
+        echo "🔍 Checking for formatting issues..."
+        
+        # Check Terraform formatting
+        terraform_issues=""
+        if ! terraform fmt -check -recursive wizardai_aws_s3_bucket/ 2>/dev/null; then
+          terraform_issues="true"
+          echo "terraform_needs_formatting=true" >> $GITHUB_OUTPUT
+        else
+          echo "terraform_needs_formatting=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Check Go formatting
+        go_issues=""
+        cd wizardai_aws_s3_bucket/test
+        if gofmt -l . | grep -q .; then
+          go_issues="true"
+          echo "go_needs_formatting=true" >> $GITHUB_OUTPUT
+        else
+          echo "go_needs_formatting=false" >> $GITHUB_OUTPUT
+        fi
+        cd ../..
+        
+        # Set overall formatting status
+        if [ -n "$terraform_issues" ] || [ -n "$go_issues" ]; then
+          echo "needs_formatting=true" >> $GITHUB_OUTPUT
+          echo "🔧 Formatting issues detected"
+        else
+          echo "needs_formatting=false" >> $GITHUB_OUTPUT
+          echo "✅ No formatting issues found"
+        fi
+
+    - name: Auto-format Terraform files
+      if: steps.check_formatting.outputs.terraform_needs_formatting == 'true'
+      run: |
+        echo "🔧 Auto-formatting Terraform files..."
+        terraform fmt -recursive wizardai_aws_s3_bucket/
+        
+        # Format examples too
+        if [ -d "wizardai_aws_s3_bucket/examples" ]; then
+          for example_dir in wizardai_aws_s3_bucket/examples/*/; do
+            if [ -d "$example_dir" ]; then
+              echo "Formatting example: $example_dir"
+              cd "$example_dir"
+              terraform fmt
+              cd - > /dev/null
+            fi
+          done
+        fi
+        
+        echo "✅ Terraform files formatted"
+
+    - name: Auto-format Go files
+      if: steps.check_formatting.outputs.go_needs_formatting == 'true'
+      run: |
+        echo "🔧 Auto-formatting Go files..."
+        cd wizardai_aws_s3_bucket/test
+        go fmt ./...
+        cd ../..
+        echo "✅ Go files formatted"
+
+    - name: Check if changes were made
+      id: check_changes
+      run: |
+        if git diff --quiet; then
+          echo "changes_made=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ No changes needed"
+        else
+          echo "changes_made=true" >> $GITHUB_OUTPUT
+          echo "📝 Changes were made"
+          echo "::group::Changes made"
+          git diff --name-only
+          echo "::endgroup::"
+        fi
+
+    - name: Commit formatting changes
+      if: steps.check_changes.outputs.changes_made == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "style: auto-format code with terraform fmt and go fmt
+
+        - Applied terraform fmt to ensure consistent Terraform formatting
+        - Applied go fmt to ensure consistent Go formatting
+        - Automated by GitHub Actions workflow
+        
+        [skip ci]"
+
+    - name: Push changes
+      if: steps.check_changes.outputs.changes_made == 'true'
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.head_ref }}
+
+    - name: Comment on PR
+      if: steps.check_changes.outputs.changes_made == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const comment = `## 🎨 Auto-Formatting Applied
+          
+          I've automatically formatted the code in this PR to ensure consistency:
+          
+          ${steps.check_formatting.outputs.terraform_needs_formatting === 'true' ? '✅ **Terraform files** formatted with `terraform fmt`' : ''}
+          ${steps.check_formatting.outputs.go_needs_formatting === 'true' ? '✅ **Go files** formatted with `go fmt`' : ''}
+          
+          ### What was changed?
+          - Applied consistent formatting according to language standards
+          - No functional changes were made
+          - Only whitespace, indentation, and code style adjustments
+          
+          ### Next steps
+          The formatting changes have been automatically committed to this PR. You can continue with your development!
+          
+          <sub>🤖 This comment was automatically generated by the Auto Format workflow</sub>`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+    - name: Summary
+      run: |
+        echo "## 📊 Auto-Format Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.check_formatting.outputs.needs_formatting }}" == "true" ]; then
+          echo "🔧 **Formatting issues were found and fixed:**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check_formatting.outputs.terraform_needs_formatting }}" == "true" ]; then
+            echo "- ✅ Terraform files formatted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.check_formatting.outputs.go_needs_formatting }}" == "true" ]; then
+            echo "- ✅ Go files formatted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.check_changes.outputs.changes_made }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📝 Changes have been automatically committed to the PR." >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "✅ **No formatting issues found** - all code is properly formatted!" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🛠️ Manual formatting commands" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "If you need to format code manually:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "# Format Terraform files" >> $GITHUB_STEP_SUMMARY
+        echo "terraform fmt -recursive" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Format Go files" >> $GITHUB_STEP_SUMMARY
+        echo "cd wizardai_aws_s3_bucket/test" >> $GITHUB_STEP_SUMMARY
+        echo "go fmt ./..." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Or use the formatting script" >> $GITHUB_STEP_SUMMARY
+        echo "./scripts/format-code.sh" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
