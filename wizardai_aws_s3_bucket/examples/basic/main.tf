@@ -16,10 +16,10 @@ provider "aws" {
 
 module "development_bucket" {
   source = "../../"
-  
-  name                = var.bucket_name
-  environment         = var.environment
-  versioning_enabled  = var.versioning_enabled
-  
+
+  name               = var.bucket_name
+  environment        = var.environment
+  versioning_enabled = var.versioning_enabled
+
   tags = var.tags
 }

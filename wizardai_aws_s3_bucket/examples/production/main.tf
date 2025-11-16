@@ -50,8 +50,8 @@ module "production_bucket" {
       noncurrent_version_expiration = null
     },
     {
-      id     = "cleanup_old_versions"
-      status = "Enabled"
+      id         = "cleanup_old_versions"
+      status     = "Enabled"
       expiration = null
       noncurrent_version_expiration = {
         noncurrent_days = 30
