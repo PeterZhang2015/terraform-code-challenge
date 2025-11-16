@@ -1,0 +1,19 @@
+# Example terraform.tfvars for development environment
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS region to deploy resources
+aws_region = "us-west-2"
+
+# Bucket configuration
+bucket_name = "my-app-logs"
+environment = "development"
+
+# Optional: Enable versioning (default: true)
+# versioning_enabled = true
+
+# Optional: Additional tags
+# tags = {
+#   Team    = "backend"
+#   Project = "my-app"
+#   Owner   = "john.doe@wizardai.com"
+# }

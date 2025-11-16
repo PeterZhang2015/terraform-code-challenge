@@ -1,0 +1,86 @@
+# Complete example terraform.tfvars showing all available variables
+# Copy this file to terraform.tfvars and customize the values
+
+# Required Variables
+name        = "my-bucket"
+environment = "development"  # Must be: development, staging, or production
+
+# Optional Variables
+
+# Enable versioning for the S3 bucket (default: true)
+versioning_enabled = true
+
+# KMS key ID for server-side encryption (if not provided, AES256 will be used)
+# kms_key_id = "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+# Lifecycle rules for cost optimization and data management
+lifecycle_rules = [
+  {
+    id     = "transition_to_ia"
+    status = "Enabled"
+    expiration = {
+      days = 365
+    }
+  },
+  {
+    id     = "cleanup_old_versions"
+    status = "Enabled"
+    noncurrent_version_expiration = {
+      noncurrent_days = 30
+    }
+  }
+]
+
+# Additional tags to apply to the bucket
+tags = {
+  Team        = "platform"
+  Project     = "my-project"
+  Environment = "development"
+  Owner       = "team@wizardai.com"
+  CostCenter  = "engineering"
+  Backup      = "required"
+}
+
+# Example configurations for different environments:
+
+# Development
+# name = "dev-app-data"
+# environment = "development"
+# versioning_enabled = true
+# lifecycle_rules = null  # No lifecycle rules for dev
+
+# Staging
+# name = "staging-app-data"
+# environment = "staging"
+# versioning_enabled = true
+# lifecycle_rules = [
+#   {
+#     id     = "cleanup_old_versions"
+#     status = "Enabled"
+#     noncurrent_version_expiration = {
+#       noncurrent_days = 60
+#     }
+#   }
+# ]
+
+# Production
+# name = "prod-critical-data"
+# environment = "production"
+# versioning_enabled = true
+# kms_key_id = "arn:aws:kms:us-west-2:123456789012:key/your-kms-key-id"
+# lifecycle_rules = [
+#   {
+#     id     = "transition_to_ia"
+#     status = "Enabled"
+#     expiration = {
+#       days = 2555  # 7 years retention
+#     }
+#   },
+#   {
+#     id     = "cleanup_old_versions"
+#     status = "Enabled"
+#     noncurrent_version_expiration = {
+#       noncurrent_days = 30
+#     }
+#   }
+# ]
