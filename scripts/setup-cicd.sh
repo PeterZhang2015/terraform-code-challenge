@@ -99,11 +99,12 @@ terraform validate
 print_success "Terraform configuration is valid"
 cd ..
 
-print_status "Checking Go modules..."
+print_status "Checking Go modules and formatting..."
 cd wizardai_aws_s3_bucket/test
 go mod download
 go mod tidy
-print_success "Go modules updated"
+go fmt ./...
+print_success "Go modules updated and formatted"
 cd ../..
 
 print_status "Setting up GitHub repository (if authenticated)..."

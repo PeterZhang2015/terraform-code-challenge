@@ -242,10 +242,27 @@ jobs:
     - name: Run go fmt
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
-        if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
-          echo "::error::Go files are not formatted. Run 'go fmt ./...' to fix."
-          gofmt -l .
+        # Check if any Go files need formatting
+        unformatted_files=$(gofmt -l .)
+        if [ -n "$unformatted_files" ]; then
+          echo "::error::Go files are not formatted properly. Please run 'go fmt ./...' to fix."
+          echo "::group::Unformatted files"
+          echo "$unformatted_files"
+          echo "::endgroup::"
+          echo "::group::Formatting differences"
+          for file in $unformatted_files; do
+            echo "--- $file (current)"
+            echo "+++ $file (formatted)"
+            gofmt -d "$file"
+          done
+          echo "::endgroup::"
+          echo ""
+          echo "To fix these issues, run the following commands:"
+          echo "  cd wizardai_aws_s3_bucket/test"
+          echo "  go fmt ./..."
           exit 1
+        else
+          echo "✅ All Go files are properly formatted"
         fi
 
     - name: Run go vet

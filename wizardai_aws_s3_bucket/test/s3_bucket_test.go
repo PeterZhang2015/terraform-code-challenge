@@ -21,7 +21,7 @@ func TestS3BucketBasic(t *testing.T) {
 	// Generate a random bucket name to avoid conflicts
 	uniqueID := random.UniqueId()
 	bucketName := fmt.Sprintf("test-bucket-%s", strings.ToLower(uniqueID))
-	
+
 	// AWS region for testing
 	awsRegion := "us-west-2"
 
@@ -108,7 +108,7 @@ func TestS3BucketProduction(t *testing.T) {
 	// Generate a random bucket name to avoid conflicts
 	uniqueID := random.UniqueId()
 	bucketName := fmt.Sprintf("test-prod-%s", strings.ToLower(uniqueID))
-	
+
 	// AWS region for testing
 	awsRegion := "us-west-2"
 
@@ -174,7 +174,6 @@ func TestS3BucketProduction(t *testing.T) {
 	assert.NotEmpty(t, lifecycleResult.Rules)
 }
 
-
 // TestS3BucketInvalidEnvironment tests validation of environment parameter
 func TestS3BucketInvalidEnvironment(t *testing.T) {
 	t.Parallel()
@@ -239,7 +238,7 @@ func TestS3BucketHTTPSEnforcement(t *testing.T) {
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
-	
+
 	policy := *policyResult.Policy
 	assert.Contains(t, policy, "DenyInsecureConnections")
 	assert.Contains(t, policy, "aws:SecureTransport")
