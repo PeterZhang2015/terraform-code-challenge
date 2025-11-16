@@ -1,0 +1,147 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Mondays at 10 AM UTC
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-terraform-providers:
+    name: Update Terraform Providers
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Check for provider updates
+      working-directory: ./wizardai_aws_s3_bucket
+      run: |
+        # Initialize to download providers
+        terraform init
+        
+        # Check current versions
+        terraform version
+        
+        # Get current AWS provider version
+        current_version=$(grep -E 'version.*=.*"~>.*"' main.tf | grep -o '[0-9]\+\.[0-9]\+' | head -1)
+        echo "Current AWS provider version constraint: ~> $current_version"
+        
+        # Check for newer versions (this is a simplified check)
+        echo "Provider update check completed"
+
+    - name: Update Go dependencies
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        # Update Go modules
+        go get -u ./...
+        go mod tidy
+        
+        # Check for vulnerabilities
+        go list -json -deps ./... | docker run --rm -i sonatypecommunity/nancy:latest sleuth || true
+
+    - name: Create PR for updates
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore(deps): update dependencies"
+        title: "chore(deps): Weekly dependency updates"
+        body: |
+          ## Automated Dependency Updates
+          
+          This PR contains automated dependency updates:
+          
+          ### Changes
+          - Updated Go modules in test directory
+          - Checked Terraform provider versions
+          
+          ### Testing
+          - [ ] All tests pass
+          - [ ] Security scans pass
+          - [ ] No breaking changes
+          
+          ### Notes
+          This PR was automatically created by the dependency update workflow.
+          Please review the changes and ensure all tests pass before merging.
+        branch: chore/dependency-updates
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
+          chore
+
+  security-updates:
+    name: Security Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Run security audit
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        # Install govulncheck
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        # Run vulnerability check
+        govulncheck ./... > security-report.txt 2>&1 || true
+        
+        # Check if vulnerabilities were found
+        if grep -q "Vulnerability" security-report.txt; then
+          echo "::warning::Security vulnerabilities found in dependencies"
+          cat security-report.txt
+        else
+          echo "No security vulnerabilities found"
+        fi
+
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-report
+        path: ./wizardai_aws_s3_bucket/test/security-report.txt
+
+  terraform-version-check:
+    name: Terraform Version Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check Terraform version compatibility
+      run: |
+        # Get current required version from module
+        required_version=$(grep -E 'required_version.*=.*">=' wizardai_aws_s3_bucket/main.tf | grep -o '>= [0-9]\+\.[0-9]\+' | cut -d' ' -f2)
+        echo "Current required Terraform version: >= $required_version"
+        
+        # Get latest Terraform version
+        latest_version=$(curl -s https://api.github.com/repos/hashicorp/terraform/releases/latest | grep -o '"tag_name": "v[^"]*' | cut -d'"' -f4 | cut -c2-)
+        echo "Latest Terraform version: $latest_version"
+        
+        # Compare versions (simplified)
+        echo "Version check completed"
+
+    - name: Check AWS provider compatibility
+      working-directory: ./wizardai_aws_s3_bucket
+      run: |
+        # Get current AWS provider constraint
+        provider_constraint=$(grep -E 'version.*=.*"~>.*"' main.tf | grep -o '~> [0-9]\+\.[0-9]\+' | cut -d' ' -f2)
+        echo "Current AWS provider constraint: ~> $provider_constraint"
+        
+        # This could be enhanced to check for latest provider versions
+        echo "Provider compatibility check completed"

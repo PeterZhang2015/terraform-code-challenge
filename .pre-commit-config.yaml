@@ -1,0 +1,109 @@
+# Pre-commit hooks for code quality and security
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-json
+      - id: pretty-format-json
+        args: ['--autofix']
+      - id: mixed-line-ending
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.86.0
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --args=-recursive
+      - id: terraform_validate
+      - id: terraform_docs
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform_tfsec
+        args:
+          - --args=--config-file=__GIT_WORKING_DIR__/.tfsec/config.yml
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
+
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+        files: \.go$
+      - id: go-vet-mod
+        files: \.go$
+      - id: go-mod-tidy
+        files: (go\.mod|go\.sum)$
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        files: \.go$
+
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.1.34
+    hooks:
+      - id: checkov
+        args: [--framework, terraform]
+        files: \.tf$
+
+  - repo: https://github.com/aquasecurity/tfsec
+    rev: v1.28.4
+    hooks:
+      - id: tfsec
+        files: \.tf$
+        args:
+          - --config-file=.tfsec/config.yml
+
+  - repo: local
+    hooks:
+      - id: terraform-wrapper-module-for-each
+        name: Terraform wrapper module for each
+        entry: |
+          bash -c '
+          for file in "$@"; do
+            if [[ "$file" == *.tf ]]; then
+              if grep -q "for_each.*=" "$file" && ! grep -q "# tflint-ignore" "$file"; then
+                echo "Warning: for_each usage detected in $file. Consider using count for simpler cases."
+              fi
+            fi
+          done
+          '
+        language: system
+        files: \.tf$
+        pass_filenames: true
+
+      - id: go-test-coverage
+        name: Go test coverage
+        entry: |
+          bash -c '
+          cd wizardai_aws_s3_bucket/test
+          if [ -f "go.mod" ]; then
+            go test -coverprofile=coverage.out ./...
+            coverage=$(go tool cover -func=coverage.out | grep total | awk "{print \$3}" | sed "s/%//")
+            if (( $(echo "$coverage < 80" | bc -l) )); then
+              echo "Test coverage is below 80%: $coverage%"
+              exit 1
+            fi
+            echo "Test coverage: $coverage%"
+          fi
+          '
+        language: system
+        pass_filenames: false
+        always_run: true

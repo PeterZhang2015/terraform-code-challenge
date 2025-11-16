@@ -1,0 +1,382 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ master, main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  TF_VERSION: "1.6.0"
+  GO_VERSION: "1.21"
+
+jobs:
+  pr-checks:
+    name: PR Quality Checks
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check PR title format
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          test
+          chore
+          ci
+        scopes: |
+          module
+          tests
+          docs
+          ci
+          security
+        requireScope: false
+
+    - name: Check for breaking changes
+      run: |
+        # Check if there are any breaking changes in the module
+        if git diff --name-only origin/master...HEAD | grep -E "(variables\.tf|outputs\.tf|main\.tf)"; then
+          echo "::warning::Changes detected in core module files. Please ensure backward compatibility."
+          
+          # Check for removed variables
+          if git diff origin/master...HEAD -- wizardai_aws_s3_bucket/variables.tf | grep -E "^-variable"; then
+            echo "::error::Removed variables detected. This is a breaking change."
+            exit 1
+          fi
+          
+          # Check for removed outputs
+          if git diff origin/master...HEAD -- wizardai_aws_s3_bucket/outputs.tf | grep -E "^-output"; then
+            echo "::error::Removed outputs detected. This is a breaking change."
+            exit 1
+          fi
+        fi
+
+    - name: Check file structure
+      run: |
+        # Ensure required files exist
+        required_files=(
+          "wizardai_aws_s3_bucket/main.tf"
+          "wizardai_aws_s3_bucket/variables.tf"
+          "wizardai_aws_s3_bucket/outputs.tf"
+          "wizardai_aws_s3_bucket/README.md"
+          "wizardai_aws_s3_bucket/test/s3_bucket_test.go"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "::error::Required file missing: $file"
+            exit 1
+          fi
+        done
+        
+        echo "✅ All required files present"
+
+    - name: Validate commit messages
+      run: |
+        # Check commit messages follow conventional commits
+        commits=$(git rev-list --no-merges origin/master..HEAD)
+        for commit in $commits; do
+          message=$(git log --format=%s -n 1 $commit)
+          if ! echo "$message" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|ci)(\(.+\))?: .+"; then
+            echo "::warning::Commit $commit does not follow conventional commits format: $message"
+          fi
+        done
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket/examples/basic
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
+        role-session-name: GitHubActions-PRValidation-${{ github.run_id }}
+        aws-region: us-west-2
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Plan
+      run: |
+        terraform plan -var="bucket_name=pr-test-$(echo ${{ github.event.number }} | tr '[:upper:]' '[:lower:]')" \
+                      -var="environment=development" \
+                      -out=tfplan
+
+    - name: Save plan output
+      run: terraform show -no-color tfplan > plan-output.txt
+
+    - name: Generate plan summary
+      id: plan_summary
+      run: |
+        # Create enhanced plan summary
+        echo "## 📋 Terraform Plan (PR Validation)" > enhanced-plan-summary.md
+        echo "" >> enhanced-plan-summary.md
+        
+        if [ -f "plan-output.txt" ]; then
+          # Extract key information
+          if grep -q "No changes" plan-output.txt; then
+            echo "ℹ️ **No infrastructure changes detected**" >> enhanced-plan-summary.md
+          elif grep -q "Plan:" plan-output.txt; then
+            PLAN_SUMMARY=$(grep "Plan:" plan-output.txt | tail -1)
+            echo "### 📊 Changes Summary" >> enhanced-plan-summary.md
+            echo "$PLAN_SUMMARY" >> enhanced-plan-summary.md
+            echo "" >> enhanced-plan-summary.md
+            
+            # Extract resource changes
+            if grep -q "# aws_s3_bucket" plan-output.txt; then
+              echo "### 🪣 S3 Bucket Changes" >> enhanced-plan-summary.md
+              grep -A 5 -B 1 "# aws_s3_bucket" plan-output.txt | head -20 >> enhanced-plan-summary.md
+              echo "" >> enhanced-plan-summary.md
+            fi
+          fi
+          
+          # Add collapsible full plan
+          echo "<details>" >> enhanced-plan-summary.md
+          echo "<summary>📄 Click to view full Terraform plan</summary>" >> enhanced-plan-summary.md
+          echo "" >> enhanced-plan-summary.md
+          echo '```terraform' >> enhanced-plan-summary.md
+          cat plan-output.txt >> enhanced-plan-summary.md
+          echo '```' >> enhanced-plan-summary.md
+          echo "</details>" >> enhanced-plan-summary.md
+        else
+          echo "❌ **Plan output not found**" >> enhanced-plan-summary.md
+        fi
+        
+        echo "" >> enhanced-plan-summary.md
+        echo "🔗 **Validation plan for PR #${{ github.event.number }}**" >> enhanced-plan-summary.md
+        echo "" >> enhanced-plan-summary.md
+        echo "<sub>This is a validation plan. The actual CI pipeline will run more comprehensive checks.</sub>" >> enhanced-plan-summary.md
+
+    - name: Comment PR with enhanced plan
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const planSummary = fs.readFileSync('./wizardai_aws_s3_bucket/examples/basic/enhanced-plan-summary.md', 'utf8');
+          
+          // Find existing validation comment to update or create new one
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const validationComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('Terraform Plan (PR Validation)')
+          );
+          
+          if (validationComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: validationComment.id,
+              body: planSummary
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: planSummary
+            });
+          }
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Run terraform fmt
+      working-directory: ./wizardai_aws_s3_bucket
+      run: |
+        if ! terraform fmt -check -recursive; then
+          echo "::error::Terraform files are not formatted. Run 'terraform fmt -recursive' to fix."
+          exit 1
+        fi
+
+    - name: Run go fmt
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+          echo "::error::Go files are not formatted. Run 'go fmt ./...' to fix."
+          gofmt -l .
+          exit 1
+        fi
+
+    - name: Run go vet
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: go vet ./...
+
+    - name: Run staticcheck
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        staticcheck ./...
+
+    - name: Check for TODO/FIXME comments
+      run: |
+        todos=$(grep -r "TODO\|FIXME" wizardai_aws_s3_bucket/ --exclude-dir=.git --exclude-dir=.terraform || true)
+        if [ -n "$todos" ]; then
+          echo "::warning::Found TODO/FIXME comments:"
+          echo "$todos"
+        fi
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check README exists and is not empty
+      run: |
+        if [ ! -f "wizardai_aws_s3_bucket/README.md" ] || [ ! -s "wizardai_aws_s3_bucket/README.md" ]; then
+          echo "::error::README.md is missing or empty"
+          exit 1
+        fi
+
+    - name: Check for required documentation sections
+      run: |
+        readme="wizardai_aws_s3_bucket/README.md"
+        required_sections=("Usage" "Requirements" "Providers" "Inputs" "Outputs")
+        
+        for section in "${required_sections[@]}"; do
+          if ! grep -q "## $section" "$readme"; then
+            echo "::error::Missing required section in README.md: $section"
+            exit 1
+          fi
+        done
+
+    - name: Validate examples
+      run: |
+        # Check if examples directory exists and contains valid Terraform
+        if [ -d "wizardai_aws_s3_bucket/examples" ]; then
+          for example_dir in wizardai_aws_s3_bucket/examples/*/; do
+            if [ -d "$example_dir" ]; then
+              echo "Validating example: $example_dir"
+              cd "$example_dir"
+              terraform init -backend=false
+              terraform validate
+              cd - > /dev/null
+            fi
+          done
+        fi
+
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check PR size
+      run: |
+        files_changed=$(git diff --name-only origin/master...HEAD | wc -l)
+        lines_added=$(git diff --numstat origin/master...HEAD | awk '{sum += $1} END {print sum}')
+        lines_deleted=$(git diff --numstat origin/master...HEAD | awk '{sum += $2} END {print sum}')
+        
+        echo "Files changed: $files_changed"
+        echo "Lines added: $lines_added"
+        echo "Lines deleted: $lines_deleted"
+        
+        if [ "$files_changed" -gt 20 ]; then
+          echo "::warning::Large PR detected ($files_changed files changed). Consider breaking into smaller PRs."
+        fi
+        
+        if [ "$lines_added" -gt 500 ]; then
+          echo "::warning::Large PR detected ($lines_added lines added). Consider breaking into smaller PRs."
+        fi
+
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [pr-checks, terraform-plan, code-quality, documentation, size-check]
+    if: always() && github.event.pull_request.draft == false
+    
+    steps:
+    - name: Create PR summary
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const jobs = [
+            { name: 'PR Quality Checks', result: '${{ needs.pr-checks.result }}' },
+            { name: 'Terraform Plan', result: '${{ needs.terraform-plan.result }}' },
+            { name: 'Code Quality', result: '${{ needs.code-quality.result }}' },
+            { name: 'Documentation Check', result: '${{ needs.documentation.result }}' },
+            { name: 'Size Check', result: '${{ needs.size-check.result }}' }
+          ];
+          
+          let summary = '## 📊 PR Validation Summary\n\n';
+          let allPassed = true;
+          
+          jobs.forEach(job => {
+            const icon = job.result === 'success' ? '✅' : 
+                        job.result === 'failure' ? '❌' : 
+                        job.result === 'cancelled' ? '⏭️' : '⚠️';
+            summary += `${icon} ${job.name}: ${job.result}\n`;
+            if (job.result !== 'success') allPassed = false;
+          });
+          
+          if (allPassed) {
+            summary += '\n🎉 All checks passed! This PR is ready for review.';
+          } else {
+            summary += '\n⚠️ Some checks failed. Please review and fix the issues above.';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });

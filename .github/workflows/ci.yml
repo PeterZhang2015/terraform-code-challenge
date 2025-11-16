@@ -1,0 +1,470 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'wizardai_aws_s3_bucket/**'
+      - '.github/workflows/**'
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'wizardai_aws_s3_bucket/**'
+      - '.github/workflows/**'
+
+env:
+  TF_VERSION: "1.6.0"
+  GO_VERSION: "1.21"
+  AWS_REGION: "us-west-2"
+
+jobs:
+  terraform-validate:
+    name: Terraform Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Terraform Format Check
+      run: terraform fmt -check -recursive
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Run tflint
+      uses: terraform-linters/setup-tflint@v4
+      with:
+        tflint_version: latest
+
+    - name: Initialize tflint
+      run: tflint --init
+
+    - name: Run tflint
+      run: tflint --format compact
+
+
+
+  terraform-docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate terraform docs
+      uses: terraform-docs/gh-actions@v1.0.0
+      with:
+        working-dir: ./wizardai_aws_s3_bucket
+        output-file: README.md
+        output-method: inject
+        git-push: false
+
+    - name: Check if documentation is up to date
+      run: |
+        if git diff --exit-code README.md; then
+          echo "Documentation is up to date"
+        else
+          echo "Documentation is out of date. Please run terraform-docs and commit the changes."
+          git diff README.md
+          exit 1
+        fi
+
+  terratest:
+    name: Terratest
+    runs-on: ubuntu-latest
+    needs: [terraform-validate]
+    if: github.event_name == 'pull_request'
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket/test
+    
+    strategy:
+      matrix:
+        test: [basic, production, validation]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        terraform_wrapper: false
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
+        role-session-name: GitHubActions-Terratest-${{ github.run_id }}-${{ matrix.test }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run tests
+      run: |
+        case "${{ matrix.test }}" in
+          basic)
+            make test-basic
+            ;;
+          production)
+            make test-production
+            ;;
+          validation)
+            make test-validation
+            ;;
+        esac
+      env:
+        AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.test }}
+        path: |
+          ./wizardai_aws_s3_bucket/test/coverage.out
+          ./wizardai_aws_s3_bucket/test/coverage.html
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket/examples/basic
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        terraform_wrapper: false
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
+        role-session-name: GitHubActions-TerraformPlan-${{ github.run_id }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        # Generate unique bucket name for PR
+        PR_NUMBER="${{ github.event.number }}"
+        BUCKET_NAME="pr-test-${PR_NUMBER}"
+        
+        # Run terraform plan
+        terraform plan \
+          -var="bucket_name=${BUCKET_NAME}" \
+          -var="environment=development" \
+          -out=tfplan \
+          -no-color > plan-output.txt 2>&1
+        
+        # Capture exit code
+        PLAN_EXIT_CODE=$?
+        
+        # Create plan summary
+        echo "## 📋 Terraform Plan Results" > plan-summary.md
+        echo "" >> plan-summary.md
+        
+        if [ $PLAN_EXIT_CODE -eq 0 ]; then
+          echo "✅ **Plan succeeded**" >> plan-summary.md
+        else
+          echo "❌ **Plan failed**" >> plan-summary.md
+        fi
+        echo "" >> plan-summary.md
+        
+        # Extract plan summary
+        if grep -q "Plan:" plan-output.txt; then
+          PLAN_SUMMARY=$(grep "Plan:" plan-output.txt | tail -1)
+          echo "### Changes Summary" >> plan-summary.md
+          echo "$PLAN_SUMMARY" >> plan-summary.md
+          echo "" >> plan-summary.md
+        fi
+        
+        # Add full plan in collapsible section
+        echo "<details>" >> plan-summary.md
+        echo "<summary>📄 Click to view full Terraform plan</summary>" >> plan-summary.md
+        echo "" >> plan-summary.md
+        echo '```terraform' >> plan-summary.md
+        cat plan-output.txt >> plan-summary.md
+        echo '```' >> plan-summary.md
+        echo "</details>" >> plan-summary.md
+        echo "" >> plan-summary.md
+        echo "🔗 **Plan generated for PR #${{ github.event.number }}**" >> plan-summary.md
+        
+        # Set output for use in PR comment
+        {
+          echo 'PLAN_SUMMARY<<EOF'
+          cat plan-summary.md
+          echo EOF
+        } >> $GITHUB_OUTPUT
+        
+        exit $PLAN_EXIT_CODE
+
+    - name: Upload plan output
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: terraform-plan
+        path: |
+          ./wizardai_aws_s3_bucket/examples/basic/tfplan
+          ./wizardai_aws_s3_bucket/examples/basic/plan-output.txt
+          ./wizardai_aws_s3_bucket/examples/basic/plan-summary.md
+
+  cost-estimation:
+    name: Cost Estimation
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ./wizardai_aws_s3_bucket/examples/basic
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        terraform_wrapper: false
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
+        role-session-name: GitHubActions-CostEstimation-${{ github.run_id }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Generate Terraform Plan for Infracost
+      run: |
+        PR_NUMBER="${{ github.event.number }}"
+        BUCKET_NAME="pr-test-${PR_NUMBER}"
+        
+        terraform plan \
+          -var="bucket_name=${BUCKET_NAME}" \
+          -var="environment=development" \
+          -out=tfplan
+
+    - name: Setup Infracost
+      uses: infracost/actions/setup@v2
+      with:
+        api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+    - name: Generate Infracost breakdown
+      id: infracost
+      run: |
+        # Generate Infracost breakdown
+        infracost breakdown --path=tfplan --format=json --out-file=infracost.json
+        
+        # Generate table format for PR comment
+        infracost breakdown --path=tfplan --format=table > infracost-table.txt
+        
+        # Create cost summary
+        echo "## 💰 Cost Estimation" > cost-summary.md
+        echo "" >> cost-summary.md
+        
+        # Check if there are any costs
+        if grep -q "OVERALL TOTAL" infracost-table.txt; then
+          TOTAL_COST=$(grep "OVERALL TOTAL" infracost-table.txt | awk '{print $NF}')
+          echo "### Monthly Cost Estimate: **$TOTAL_COST**" >> cost-summary.md
+          echo "" >> cost-summary.md
+          
+          echo "<details>" >> cost-summary.md
+          echo "<summary>📊 Click to view detailed cost breakdown</summary>" >> cost-summary.md
+          echo "" >> cost-summary.md
+          echo '```' >> cost-summary.md
+          cat infracost-table.txt >> cost-summary.md
+          echo '```' >> cost-summary.md
+          echo "</details>" >> cost-summary.md
+        else
+          echo "ℹ️ **No costs detected** - This infrastructure appears to be within AWS free tier or uses free resources." >> cost-summary.md
+        fi
+        echo "" >> cost-summary.md
+        echo "💡 **Note**: Costs are estimates and may vary based on actual usage." >> cost-summary.md
+        echo "" >> cost-summary.md
+        echo "🔗 [Learn more about Infracost](https://www.infracost.io/)" >> cost-summary.md
+        
+        # Set output for use in PR comment
+        {
+          echo 'COST_SUMMARY<<EOF'
+          cat cost-summary.md
+          echo EOF
+        } >> $GITHUB_OUTPUT
+
+    - name: Upload cost estimation
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: cost-estimation
+        path: |
+          ./wizardai_aws_s3_bucket/examples/basic/infracost.json
+          ./wizardai_aws_s3_bucket/examples/basic/infracost-table.txt
+          ./wizardai_aws_s3_bucket/examples/basic/cost-summary.md
+
+  pr-comment:
+    name: PR Comment Summary
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, terraform-plan, cost-estimation]
+    if: always() && github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      continue-on-error: true
+
+    - name: Create comprehensive PR comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Initialize comment sections
+          let comment = `# 🚀 CI/CD Pipeline Results for PR #${{ github.event.number }}\n\n`;
+          
+          // Job status summary
+          const jobs = [
+            { name: 'Terraform Validation', result: '${{ needs.terraform-validate.result }}', icon: '${{ needs.terraform-validate.result }}' === 'success' ? '✅' : '❌' },
+            { name: 'Terraform Plan', result: '${{ needs.terraform-plan.result }}', icon: '${{ needs.terraform-plan.result }}' === 'success' ? '✅' : '❌' },
+            { name: 'Cost Estimation', result: '${{ needs.cost-estimation.result }}', icon: '${{ needs.cost-estimation.result }}' === 'success' ? '✅' : '${{ needs.cost-estimation.result }}' === 'skipped' ? '⏭️' : '❌' }
+          ];
+          
+          comment += `## 📊 Pipeline Status\n\n`;
+          jobs.forEach(job => {
+            comment += `${job.icon} **${job.name}**: ${job.result}\n`;
+          });
+          comment += `\n`;
+          
+          // Note about security scan
+          comment += `## 🔒 Security Scan Results\n\n`;
+          comment += `🔍 Security analysis is running in a separate workflow. Results will be posted as a separate comment.\n\n`;
+          comment += `📋 Check the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning) for detailed SARIF results.\n\n`;
+          
+          // Add terraform plan results
+          try {
+            const planSummary = fs.readFileSync('terraform-plan/plan-summary.md', 'utf8');
+            comment += planSummary + '\n\n';
+          } catch (error) {
+            comment += `## 📋 Terraform Plan Results\n\n`;
+            if ('${{ needs.terraform-plan.result }}' === 'success') {
+              comment += `✅ Terraform plan completed successfully.\n\n`;
+            } else if ('${{ needs.terraform-plan.result }}' === 'failure') {
+              comment += `❌ Terraform plan failed. Please check the workflow logs for details.\n\n`;
+            } else {
+              comment += `⏭️ Terraform plan was skipped.\n\n`;
+            }
+          }
+          
+          // Add cost estimation results
+          try {
+            const costSummary = fs.readFileSync('cost-estimation/cost-summary.md', 'utf8');
+            comment += costSummary + '\n\n';
+          } catch (error) {
+            if ('${{ secrets.INFRACOST_API_KEY }}' === '') {
+              comment += `## 💰 Cost Estimation\n\n`;
+              comment += `ℹ️ **Cost estimation skipped** - Infracost API key not configured.\n\n`;
+              comment += `To enable cost estimation, add \`INFRACOST_API_KEY\` to repository secrets.\n\n`;
+            } else if ('${{ needs.cost-estimation.result }}' === 'failure') {
+              comment += `## 💰 Cost Estimation\n\n`;
+              comment += `❌ Cost estimation failed. Please check the workflow logs for details.\n\n`;
+            }
+          }
+          
+          // Add footer with useful links
+          comment += `---\n\n`;
+          comment += `### 🔗 Useful Links\n\n`;
+          comment += `- 📋 [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+          comment += `- 🔒 [Security Results](https://github.com/${{ github.repository }}/security/code-scanning)\n`;
+          comment += `- 📊 [All Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+          comment += `- 📚 [CI/CD Documentation](.github/README.md)\n\n`;
+          
+          // Add timestamp
+          const now = new Date().toISOString();
+          comment += `<sub>🤖 This comment was automatically generated at ${now}</sub>`;
+          
+          // Find existing comment to update or create new one
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('CI/CD Pipeline Results for PR')
+          );
+          
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: comment
+            });
+            console.log('Updated existing PR comment');
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+            console.log('Created new PR comment');
+          }

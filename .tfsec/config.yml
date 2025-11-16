@@ -1,0 +1,57 @@
+# tfsec configuration for security scanning
+
+# Minimum severity level to report
+minimum_severity: MEDIUM
+
+# Include passed checks in output
+include_passed: false
+
+# Include ignored checks in output
+include_ignored: false
+
+# Exclude specific checks (if needed)
+exclude:
+  # Example: Exclude specific checks that may not apply
+  # - aws-s3-enable-bucket-logging  # If logging is handled elsewhere
+
+# Severity overrides
+severity_overrides:
+  aws-s3-enable-versioning: HIGH
+  aws-s3-enable-bucket-encryption: CRITICAL
+  aws-s3-no-public-buckets: CRITICAL
+  aws-s3-block-public-acls: CRITICAL
+  aws-s3-block-public-policy: CRITICAL
+  aws-s3-ignore-public-acls: CRITICAL
+  aws-s3-restrict-public-buckets: CRITICAL
+
+# Custom checks configuration
+checks:
+  - code: aws-s3-enable-bucket-encryption
+    description: "S3 bucket should have encryption enabled"
+    impact: "Data could be read if compromised"
+    resolution: "Turn on encryption using customer managed keys"
+    severity: CRITICAL
+    
+  - code: aws-s3-enable-versioning
+    description: "S3 bucket should have versioning enabled"
+    impact: "Objects could be deleted or modified without recovery"
+    resolution: "Enable versioning on the S3 bucket"
+    severity: HIGH
+
+# Output format options
+format: default
+
+# Soft fail - don't exit with error code
+soft_fail: false
+
+# Exclude directories
+exclude_paths:
+  - ".terraform/"
+  - "*.tfvars"
+  - "examples/*/.terraform/"
+
+# Include additional metadata
+include_metadata: true
+
+# Custom policies directory (if you have custom Rego policies)
+# custom_check_dir: ".tfsec/policies"
