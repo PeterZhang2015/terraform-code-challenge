@@ -35,15 +35,78 @@ jobs:
         terraform_version: ${{ env.TF_VERSION }}
 
     - name: Terraform Format Check
-      run: terraform fmt -check -recursive
+      id: fmt
+      run: |
+        echo "## 📝 Terraform Format Check" > ../terraform-validation-results.md
+        echo "" >> ../terraform-validation-results.md
+        
+        if terraform fmt -check -recursive > ../fmt-output.txt 2>&1; then
+          echo "✅ **Format check passed** - All files are properly formatted" >> ../terraform-validation-results.md
+          echo "fmt_result=success" >> $GITHUB_OUTPUT
+        else
+          echo "❌ **Format check failed** - Files need formatting" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo "<details>" >> ../terraform-validation-results.md
+          echo "<summary>📄 Click to view formatting issues</summary>" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          cat ../fmt-output.txt >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          echo "</details>" >> ../terraform-validation-results.md
+          echo "fmt_result=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "" >> ../terraform-validation-results.md
 
     - name: Terraform Init
-      run: terraform init
+      id: init
+      run: |
+        echo "## 🚀 Terraform Init" >> ../terraform-validation-results.md
+        echo "" >> ../terraform-validation-results.md
+        
+        if terraform init > ../init-output.txt 2>&1; then
+          echo "✅ **Initialization successful**" >> ../terraform-validation-results.md
+          echo "init_result=success" >> $GITHUB_OUTPUT
+        else
+          echo "❌ **Initialization failed**" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo "<details>" >> ../terraform-validation-results.md
+          echo "<summary>📄 Click to view initialization errors</summary>" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          cat ../init-output.txt >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          echo "</details>" >> ../terraform-validation-results.md
+          echo "init_result=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "" >> ../terraform-validation-results.md
 
     - name: Terraform Validate
-      run: terraform validate
+      id: validate
+      run: |
+        echo "## ✅ Terraform Validate" >> ../terraform-validation-results.md
+        echo "" >> ../terraform-validation-results.md
+        
+        if terraform validate > ../validate-output.txt 2>&1; then
+          echo "✅ **Validation successful** - Configuration is valid" >> ../terraform-validation-results.md
+          echo "validate_result=success" >> $GITHUB_OUTPUT
+        else
+          echo "❌ **Validation failed** - Configuration has errors" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo "<details>" >> ../terraform-validation-results.md
+          echo "<summary>📄 Click to view validation errors</summary>" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          cat ../validate-output.txt >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          echo "</details>" >> ../terraform-validation-results.md
+          echo "validate_result=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "" >> ../terraform-validation-results.md
 
-    - name: Run tflint
+    - name: Setup tflint
       uses: terraform-linters/setup-tflint@v4
       with:
         tflint_version: latest
@@ -52,7 +115,55 @@ jobs:
       run: tflint --init
 
     - name: Run tflint
-      run: tflint --format compact
+      id: tflint
+      run: |
+        echo "## 🔍 TFLint Analysis" >> ../terraform-validation-results.md
+        echo "" >> ../terraform-validation-results.md
+        
+        if tflint --format compact > ../tflint-output.txt 2>&1; then
+          if [ -s ../tflint-output.txt ]; then
+            # TFLint found issues but didn't fail
+            ISSUE_COUNT=$(wc -l < ../tflint-output.txt)
+            echo "⚠️ **TFLint completed with $ISSUE_COUNT warnings**" >> ../terraform-validation-results.md
+            echo "" >> ../terraform-validation-results.md
+            echo "<details>" >> ../terraform-validation-results.md
+            echo "<summary>📄 Click to view TFLint findings</summary>" >> ../terraform-validation-results.md
+            echo "" >> ../terraform-validation-results.md
+            echo '```' >> ../terraform-validation-results.md
+            cat ../tflint-output.txt >> ../terraform-validation-results.md
+            echo '```' >> ../terraform-validation-results.md
+            echo "</details>" >> ../terraform-validation-results.md
+            echo "tflint_result=warning" >> $GITHUB_OUTPUT
+          else
+            echo "✅ **TFLint passed** - No issues found" >> ../terraform-validation-results.md
+            echo "tflint_result=success" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "❌ **TFLint failed** - Critical issues found" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo "<details>" >> ../terraform-validation-results.md
+          echo "<summary>📄 Click to view TFLint errors</summary>" >> ../terraform-validation-results.md
+          echo "" >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          cat ../tflint-output.txt >> ../terraform-validation-results.md
+          echo '```' >> ../terraform-validation-results.md
+          echo "</details>" >> ../terraform-validation-results.md
+          echo "tflint_result=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        echo "" >> ../terraform-validation-results.md
+
+    - name: Upload validation results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: terraform-validation-results
+        path: |
+          terraform-validation-results.md
+          fmt-output.txt
+          init-output.txt
+          validate-output.txt
+          tflint-output.txt
 
 
 
@@ -76,14 +187,38 @@ jobs:
         git-push: false
 
     - name: Check if documentation is up to date
+      id: docs
       run: |
-        if git diff --exit-code README.md; then
-          echo "Documentation is up to date"
+        echo "## 📚 Documentation Check" > ../terraform-docs-results.md
+        echo "" >> ../terraform-docs-results.md
+        
+        if git diff --exit-code README.md > ../docs-diff.txt 2>&1; then
+          echo "✅ **Documentation is up to date** - No changes needed" >> ../terraform-docs-results.md
+          echo "docs_result=success" >> $GITHUB_OUTPUT
         else
-          echo "Documentation is out of date. Please run terraform-docs and commit the changes."
-          git diff README.md
+          echo "❌ **Documentation is out of date** - Please run terraform-docs and commit changes" >> ../terraform-docs-results.md
+          echo "" >> ../terraform-docs-results.md
+          echo "<details>" >> ../terraform-docs-results.md
+          echo "<summary>📄 Click to view documentation changes needed</summary>" >> ../terraform-docs-results.md
+          echo "" >> ../terraform-docs-results.md
+          echo '```diff' >> ../terraform-docs-results.md
+          cat ../docs-diff.txt >> ../terraform-docs-results.md
+          echo '```' >> ../terraform-docs-results.md
+          echo "</details>" >> ../terraform-docs-results.md
+          echo "" >> ../terraform-docs-results.md
+          echo "💡 **To fix:** Run \`terraform-docs markdown table --output-file README.md .\` in the module directory" >> ../terraform-docs-results.md
+          echo "docs_result=failure" >> $GITHUB_OUTPUT
           exit 1
         fi
+
+    - name: Upload docs results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: terraform-docs-results
+        path: |
+          terraform-docs-results.md
+          docs-diff.txt
 
   terratest:
     name: Terratest
@@ -135,18 +270,70 @@ jobs:
       run: make deps
 
     - name: Run tests
+      id: test
       run: |
+        # Create test results file
+        echo "## 🧪 Terratest Results - ${{ matrix.test }}" > ../../terratest-${{ matrix.test }}-results.md
+        echo "" >> ../../terratest-${{ matrix.test }}-results.md
+        
+        # Run the appropriate test
         case "${{ matrix.test }}" in
           basic)
-            make test-basic
+            if make test-basic > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+              echo "✅ **Basic tests passed** - All infrastructure tests successful" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=success" >> $GITHUB_OUTPUT
+            else
+              echo "❌ **Basic tests failed** - Infrastructure tests encountered errors" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
             ;;
           production)
-            make test-production
+            if make test-production > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+              echo "✅ **Production tests passed** - Production-grade configuration validated" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=success" >> $GITHUB_OUTPUT
+            else
+              echo "❌ **Production tests failed** - Production configuration issues found" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
             ;;
           validation)
-            make test-validation
+            if make test-validation > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+              echo "✅ **Validation tests passed** - Input validation working correctly" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=success" >> $GITHUB_OUTPUT
+            else
+              echo "❌ **Validation tests failed** - Input validation issues detected" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "" >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              echo '```' >> ../../terratest-${{ matrix.test }}-results.md
+              echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "test_result=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
             ;;
         esac
+        echo "" >> ../../terratest-${{ matrix.test }}-results.md
       env:
         AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
@@ -158,6 +345,8 @@ jobs:
         path: |
           ./wizardai_aws_s3_bucket/test/coverage.out
           ./wizardai_aws_s3_bucket/test/coverage.html
+          terratest-${{ matrix.test }}-results.md
+          test-${{ matrix.test }}-output.txt
 
   terraform-plan:
     name: Terraform Plan
@@ -357,7 +546,7 @@ jobs:
   pr-comment:
     name: PR Comment Summary
     runs-on: ubuntu-latest
-    needs: [terraform-validate, terraform-plan, cost-estimation]
+    needs: [terraform-validate, terraform-docs, terratest, terraform-plan, cost-estimation]
     if: always() && github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -383,6 +572,8 @@ jobs:
           // Job status summary
           const jobs = [
             { name: 'Terraform Validation', result: '${{ needs.terraform-validate.result }}', icon: '${{ needs.terraform-validate.result }}' === 'success' ? '✅' : '❌' },
+            { name: 'Documentation Check', result: '${{ needs.terraform-docs.result }}', icon: '${{ needs.terraform-docs.result }}' === 'success' ? '✅' : '❌' },
+            { name: 'Terratest', result: '${{ needs.terratest.result }}', icon: '${{ needs.terratest.result }}' === 'success' ? '✅' : '${{ needs.terratest.result }}' === 'skipped' ? '⏭️' : '❌' },
             { name: 'Terraform Plan', result: '${{ needs.terraform-plan.result }}', icon: '${{ needs.terraform-plan.result }}' === 'success' ? '✅' : '❌' },
             { name: 'Cost Estimation', result: '${{ needs.cost-estimation.result }}', icon: '${{ needs.cost-estimation.result }}' === 'success' ? '✅' : '${{ needs.cost-estimation.result }}' === 'skipped' ? '⏭️' : '❌' }
           ];
@@ -393,10 +584,59 @@ jobs:
           });
           comment += `\n`;
           
-          // Note about security scan
-          comment += `## 🔒 Security Scan Results\n\n`;
-          comment += `🔍 Security analysis is running in a separate workflow. Results will be posted as a separate comment.\n\n`;
-          comment += `📋 Check the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning) for detailed SARIF results.\n\n`;
+          // Add terraform validation results
+          try {
+            const validationResults = fs.readFileSync('terraform-validation-results/terraform-validation-results.md', 'utf8');
+            comment += validationResults + '\n\n';
+          } catch (error) {
+            comment += `## 📝 Terraform Validation Results\n\n`;
+            if ('${{ needs.terraform-validate.result }}' === 'success') {
+              comment += `✅ All validation checks passed (format, init, validate, lint).\n\n`;
+            } else {
+              comment += `❌ Validation failed. Please check the workflow logs for details.\n\n`;
+            }
+          }
+          
+          // Add terraform docs results
+          try {
+            const docsResults = fs.readFileSync('terraform-docs-results/terraform-docs-results.md', 'utf8');
+            comment += docsResults + '\n\n';
+          } catch (error) {
+            comment += `## 📚 Documentation Check Results\n\n`;
+            if ('${{ needs.terraform-docs.result }}' === 'success') {
+              comment += `✅ Documentation is up to date.\n\n`;
+            } else {
+              comment += `❌ Documentation check failed. Please check the workflow logs for details.\n\n`;
+            }
+          }
+          
+          // Add terratest results
+          const testTypes = ['basic', 'production', 'validation'];
+          let testResultsFound = false;
+          
+          for (const testType of testTypes) {
+            try {
+              const testResults = fs.readFileSync(`test-results-${testType}/terratest-${testType}-results.md`, 'utf8');
+              if (!testResultsFound) {
+                comment += `## 🧪 Terratest Results\n\n`;
+                testResultsFound = true;
+              }
+              comment += testResults + '\n';
+            } catch (error) {
+              // Test result file not found, skip
+            }
+          }
+          
+          if (!testResultsFound) {
+            comment += `## 🧪 Terratest Results\n\n`;
+            if ('${{ needs.terratest.result }}' === 'success') {
+              comment += `✅ All infrastructure tests passed.\n\n`;
+            } else if ('${{ needs.terratest.result }}' === 'skipped') {
+              comment += `⏭️ Tests were skipped (not a pull request).\n\n`;
+            } else {
+              comment += `❌ Some tests failed. Please check the workflow logs for details.\n\n`;
+            }
+          }
           
           // Add terraform plan results
           try {
@@ -427,6 +667,11 @@ jobs:
               comment += `❌ Cost estimation failed. Please check the workflow logs for details.\n\n`;
             }
           }
+          
+          // Note about security scan
+          comment += `## 🔒 Security Scan Results\n\n`;
+          comment += `🔍 Security analysis is running in a separate workflow. Results will be posted as a separate comment.\n\n`;
+          comment += `📋 Check the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning) for detailed SARIF results.\n\n`;
           
           // Add footer with useful links
           comment += `---\n\n`;
