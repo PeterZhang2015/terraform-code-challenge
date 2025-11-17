@@ -156,7 +156,7 @@ jobs:
           fugue/regula run --format json /workspace > regula-results.json || true
 
     - name: Upload Regula results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: regula-compliance-results
@@ -198,7 +198,7 @@ jobs:
         EOF
 
     - name: Upload compliance report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: compliance-report
         path: compliance-report.md
@@ -211,7 +211,7 @@ jobs:
     
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Create security summary
       run: |
@@ -252,7 +252,7 @@ jobs:
         EOF
 
     - name: Upload security summary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: security-summary
         path: security-summary.md
