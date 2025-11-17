@@ -51,10 +51,11 @@ jobs:
 
     - name: Upload Checkov results to GitHub Security
       uses: github/codeql-action/upload-sarif@v4
-      if: always()
+      if: always() && hashFiles('checkov-results.sarif') != ''
       with:
         sarif_file: checkov-results.sarif
         category: checkov
+      continue-on-error: true
 
     - name: Run tfsec
       uses: aquasecurity/tfsec-action@v1.0.3
@@ -66,10 +67,11 @@ jobs:
 
     - name: Upload tfsec results to GitHub Security
       uses: github/codeql-action/upload-sarif@v4
-      if: always()
+      if: always() && hashFiles('tfsec-results.sarif') != ''
       with:
         sarif_file: tfsec-results.sarif
         category: tfsec
+      continue-on-error: true
 
     - name: Run Terrascan
       uses: tenable/terrascan-action@main
