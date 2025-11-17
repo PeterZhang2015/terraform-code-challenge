@@ -193,7 +193,7 @@ jobs:
         echo "" >> security-report.md
         echo "<sub>🤖 Security analysis completed at $(date -u +"%Y-%m-%d %H:%M:%S UTC")</sub>" >> security-report.md
         
-        # Set output for GitHub Actions
+        # Set output for GitHub Actions (properly escaped)
         {
           echo 'SECURITY_REPORT<<EOF'
           cat security-report.md
@@ -206,8 +206,18 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          const securityReport = `${{ steps.security_report.outputs.SECURITY_REPORT }}`;
-          const totalIssues = ${{ steps.security_report.outputs.total_issues }};
+          const fs = require('fs');
+          
+          // Read security report from file instead of using template literal
+          let securityReport = '';
+          try {
+            securityReport = fs.readFileSync('./wizardai_aws_s3_bucket/security-report.md', 'utf8');
+          } catch (error) {
+            console.log('Could not read security report file:', error.message);
+            securityReport = '## 🛡️ Security Analysis Report\n\n❌ Security report could not be generated.';
+          }
+          
+          const totalIssues = parseInt('${{ steps.security_report.outputs.total_issues }}') || 0;
           
           // Find existing security comment to update or create new one
           const { data: comments } = await github.rest.issues.listComments({
@@ -221,24 +231,30 @@ jobs:
             comment.body.includes('Security Analysis Report')
           );
           
-          if (securityComment) {
-            // Update existing comment
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: securityComment.id,
-              body: securityReport
-            });
-            console.log('Updated existing security comment');
-          } else {
-            // Create new comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: securityReport
-            });
-            console.log('Created new security comment');
+          try {
+            if (securityComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: securityComment.id,
+                body: securityReport
+              });
+              console.log('✅ Updated existing security comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: securityReport
+              });
+              console.log('✅ Created new security comment');
+            }
+          } catch (error) {
+            console.log('⚠️ Could not create/update security comment:', error.message);
+            console.log('📊 Security Report (logged instead):');
+            console.log(securityReport);
           }
           
           // Set job status based on results
