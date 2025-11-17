@@ -115,7 +115,7 @@ jobs:
         terraform_version: ${{ env.TF_VERSION }}
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
         role-session-name: GitHubActions-PRValidation-${{ github.run_id }}

@@ -252,7 +252,7 @@ jobs:
         terraform_wrapper: false
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
         role-session-name: GitHubActions-Terratest-${{ github.run_id }}-${{ matrix.test }}
@@ -370,7 +370,7 @@ jobs:
         terraform_wrapper: false
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
         role-session-name: GitHubActions-TerraformPlan-${{ github.run_id }}
@@ -468,7 +468,7 @@ jobs:
         terraform_wrapper: false
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
         role-session-name: GitHubActions-CostEstimation-${{ github.run_id }}
