@@ -21,16 +21,16 @@ func TestS3BucketBasic(t *testing.T) {
 	// Generate a random bucket name to avoid conflicts
 	uniqueID := random.UniqueId()
 	bucketName := fmt.Sprintf("test-bucket-%s", strings.ToLower(uniqueID))
-	
+
 	// AWS region for testing
 	awsRegion := "us-west-2"
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "development",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "development",
 			"tags": map[string]string{
 				"Test": "terratest",
 			},
@@ -108,16 +108,16 @@ func TestS3BucketProduction(t *testing.T) {
 	// Generate a random bucket name to avoid conflicts
 	uniqueID := random.UniqueId()
 	bucketName := fmt.Sprintf("test-prod-%s", strings.ToLower(uniqueID))
-	
+
 	// AWS region for testing
 	awsRegion := "us-west-2"
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/production",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "production",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "production",
 			"tags": map[string]string{
 				"Test":        "terratest",
 				"Environment": "production",
@@ -174,7 +174,6 @@ func TestS3BucketProduction(t *testing.T) {
 	assert.NotEmpty(t, lifecycleResult.Rules)
 }
 
-
 // TestS3BucketInvalidEnvironment tests validation of environment parameter
 func TestS3BucketInvalidEnvironment(t *testing.T) {
 	t.Parallel()
@@ -186,9 +185,9 @@ func TestS3BucketInvalidEnvironment(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "invalid-env", // This should fail validation
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "invalid-env", // This should fail validation
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": awsRegion,
@@ -212,9 +211,9 @@ func TestS3BucketHTTPSEnforcement(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../examples/basic",
 		Vars: map[string]interface{}{
-			"aws_region":   awsRegion,
-			"bucket_name":  bucketName,
-			"environment":  "development",
+			"aws_region":  awsRegion,
+			"bucket_name": bucketName,
+			"environment": "development",
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": awsRegion,
@@ -239,7 +238,7 @@ func TestS3BucketHTTPSEnforcement(t *testing.T) {
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
-	
+
 	policy := *policyResult.Policy
 	assert.Contains(t, policy, "DenyInsecureConnections")
 	assert.Contains(t, policy, "aws:SecureTransport")

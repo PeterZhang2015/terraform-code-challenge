@@ -16,21 +16,21 @@ versioning_enabled = true
 
 # Optional: Lifecycle rules for cost optimization
 lifecycle_rules = [
-   {
-     id     = "transition_to_ia"
-     status = "Enabled"
-     expiration = {
-       days = 365
-     }
-   },
-   {
-     id     = "cleanup_old_versions"
-     status = "Enabled"
-     noncurrent_version_expiration = {
-       noncurrent_days = 30
-     }
-   }
- ]
+  {
+    id     = "transition_to_ia"
+    status = "Enabled"
+    expiration = {
+      days = 365
+    }
+  },
+  {
+    id     = "cleanup_old_versions"
+    status = "Enabled"
+    noncurrent_version_expiration = {
+      noncurrent_days = 30
+    }
+  }
+]
 
 # Tags for production environment
 tags = {
