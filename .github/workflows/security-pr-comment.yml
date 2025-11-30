@@ -54,8 +54,11 @@ jobs:
 
     - name: Run tfsec
       id: tfsec
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Install tfsec
+        # Install tfsec with GitHub token to avoid rate limits
+        export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
         curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
         
         # Run tfsec and capture output
@@ -78,12 +81,12 @@ jobs:
         tar -xf terrascan.tar.gz terrascan && rm terrascan.tar.gz
         chmod +x terrascan
         
-        # Run Terrascan
-        ./terrascan scan -i terraform -d . --output human > terrascan-output.txt 2>&1 || true
+        # Run Terrascan with JSON output
+        ./terrascan scan -i terraform -d . -o json > terrascan-output.json 2>&1 || true
         
         # Parse results
-        if [ -f "terrascan-output.txt" ]; then
-          TERRASCAN_ISSUES=$(grep -c "Violation Details" terrascan-output.txt 2>/dev/null || echo "0")
+        if [ -f "terrascan-output.json" ]; then
+          TERRASCAN_ISSUES=$(jq -r '.results.violations | length' terrascan-output.json 2>/dev/null || echo "0")
           echo "terrascan_issues=$TERRASCAN_ISSUES" >> $GITHUB_OUTPUT
         else
           echo "terrascan_issues=0" >> $GITHUB_OUTPUT
