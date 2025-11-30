@@ -173,26 +173,25 @@ jobs:
         
         git push origin $NEW_VERSION
 
+    - name: Create module archive
+      run: |
+        cd wizardai_aws_s3_bucket
+        zip -r ../wizardai-s3-bucket-module-${{ steps.calc_version.outputs.new_version }}.zip . \
+          -x "*.terraform/*" -x ".terraform.lock.hcl" -x "test/.terraform/*"
+        cd ..
+
     - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.calc_version.outputs.new_version }}
-        release_name: "Wizard.AI S3 Bucket Module ${{ steps.calc_version.outputs.new_version }}"
+        name: "Wizard.AI S3 Bucket Module ${{ steps.calc_version.outputs.new_version }}"
         body_path: ${{ steps.changelog.outputs.changelog_file }}
         draft: false
         prerelease: false
-
-    - name: Upload module as release asset
-      uses: actions/upload-release-asset@v1
+        files: |
+          wizardai-s3-bucket-module-${{ steps.calc_version.outputs.new_version }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./wizardai_aws_s3_bucket
-        asset_name: wizardai-s3-bucket-module-${{ steps.calc_version.outputs.new_version }}.zip
-        asset_content_type: application/zip
 
   notify:
     name: Notify Release
