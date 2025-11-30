@@ -19,6 +19,7 @@ resource "aws_kms_key" "s3_key" {
   count                   = var.kms_key_id == null ? 1 : 0
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = merge(var.tags, {
     Name        = "s3-encryption-key"
