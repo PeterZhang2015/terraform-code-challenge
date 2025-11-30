@@ -107,7 +107,7 @@ jobs:
         echo "" >> ../terraform-validation-results.md
 
     - name: Setup tflint
-      uses: terraform-linters/setup-tflint@v4
+      uses: terraform-linters/setup-tflint@v6
       with:
         tflint_version: latest
 
