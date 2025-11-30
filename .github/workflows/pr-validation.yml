@@ -252,10 +252,17 @@ jobs:
           exit 1
         fi
 
+    - name: Download Go dependencies
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        echo "� Downlioading Go dependencies..."
+        go mod download
+        go mod tidy
+
     - name: Check and format Go files
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
-        echo "🔍 Checking Go file formatting..."
+        echo "� Cheucking Go file formatting..."
         
         # Check if gofmt finds any issues
         unformatted=$(gofmt -l . 2>/dev/null || true)
