@@ -1,13 +1,15 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
@@ -55,22 +57,21 @@ func TestS3BucketBasic(t *testing.T) {
 	expectedARNPrefix := fmt.Sprintf("arn:aws:s3:::wizardai-%s-development", bucketName)
 	assert.Equal(t, expectedARNPrefix, bucketARN)
 
-	// Create AWS session to verify bucket properties
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(awsRegion),
-	})
+	// Create AWS SDK v2 config and client
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
 	require.NoError(t, err)
 
-	s3Client := s3.New(sess)
+	s3Client := s3.NewFromConfig(cfg)
 
 	// Test bucket exists and is accessible
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+	_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
 
 	// Test encryption is enabled
-	encryptionResult, err := s3Client.GetBucketEncryption(&s3.GetBucketEncryptionInput{
+	encryptionResult, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
@@ -78,14 +79,14 @@ func TestS3BucketBasic(t *testing.T) {
 	assert.NotEmpty(t, encryptionResult.ServerSideEncryptionConfiguration.Rules)
 
 	// Test versioning is enabled
-	versioningResult, err := s3Client.GetBucketVersioning(&s3.GetBucketVersioningInput{
+	versioningResult, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "Enabled", *versioningResult.Status)
+	assert.Equal(t, types.BucketVersioningStatusEnabled, versioningResult.Status)
 
 	// Test public access is blocked
-	publicAccessResult, err := s3Client.GetPublicAccessBlock(&s3.GetPublicAccessBlockInput{
+	publicAccessResult, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
@@ -95,7 +96,7 @@ func TestS3BucketBasic(t *testing.T) {
 	assert.True(t, *publicAccessResult.PublicAccessBlockConfiguration.RestrictPublicBuckets)
 
 	// Test bucket policy exists (HTTPS enforcement)
-	_, err = s3Client.GetBucketPolicy(&s3.GetBucketPolicyInput{
+	_, err = s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
@@ -147,27 +148,26 @@ func TestS3BucketProduction(t *testing.T) {
 	// Verify KMS key was created
 	assert.NotEmpty(t, kmsKeyID)
 
-	// Create AWS session to verify bucket properties
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(awsRegion),
-	})
+	// Create AWS SDK v2 config and client
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
 	require.NoError(t, err)
 
-	s3Client := s3.New(sess)
+	s3Client := s3.NewFromConfig(cfg)
 
 	// Test KMS encryption is enabled
-	encryptionResult, err := s3Client.GetBucketEncryption(&s3.GetBucketEncryptionInput{
+	encryptionResult, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, encryptionResult.ServerSideEncryptionConfiguration)
 	rules := encryptionResult.ServerSideEncryptionConfiguration.Rules
 	assert.NotEmpty(t, rules)
-	assert.Equal(t, "aws:kms", *rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
+	assert.Equal(t, types.ServerSideEncryptionAwsKms, rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
 	assert.NotNil(t, rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID)
 
 	// Test lifecycle configuration exists
-	lifecycleResult, err := s3Client.GetBucketLifecycleConfiguration(&s3.GetBucketLifecycleConfigurationInput{
+	lifecycleResult, err := s3Client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)
@@ -225,16 +225,15 @@ func TestS3BucketHTTPSEnforcement(t *testing.T) {
 
 	bucketID := terraform.Output(t, terraformOptions, "bucket_name")
 
-	// Create AWS session
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(awsRegion),
-	})
+	// Create AWS SDK v2 config and client
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
 	require.NoError(t, err)
 
-	s3Client := s3.New(sess)
+	s3Client := s3.NewFromConfig(cfg)
 
 	// Test that bucket policy exists and contains HTTPS enforcement
-	policyResult, err := s3Client.GetBucketPolicy(&s3.GetBucketPolicyInput{
+	policyResult, err := s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
 		Bucket: aws.String(bucketID),
 	})
 	require.NoError(t, err)

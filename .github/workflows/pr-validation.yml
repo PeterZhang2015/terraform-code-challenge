@@ -283,7 +283,7 @@ jobs:
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
         go install honnef.co/go/tools/cmd/staticcheck@latest
-        staticcheck ./...
+        staticcheck -f stylish ./...
 
     - name: Check for TODO/FIXME comments
       run: |
