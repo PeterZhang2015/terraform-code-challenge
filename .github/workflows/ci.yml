@@ -449,7 +449,7 @@ jobs:
     name: Cost Estimation
     runs-on: ubuntu-latest
     needs: terraform-plan
-    if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+    if: github.event_name == 'pull_request'
     permissions:
       id-token: write
       contents: read
@@ -488,12 +488,18 @@ jobs:
           -out=tfplan
 
     - name: Setup Infracost
+      if: env.INFRACOST_API_KEY != ''
       uses: infracost/actions/setup@v2
       with:
         api-key: ${{ secrets.INFRACOST_API_KEY }}
+      env:
+        INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
 
     - name: Generate Infracost breakdown
+      if: env.INFRACOST_API_KEY != ''
       id: infracost
+      env:
+        INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
       run: |
         # Generate Infracost breakdown
         infracost breakdown --path=tfplan --format=json --out-file=infracost.json
