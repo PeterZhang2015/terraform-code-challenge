@@ -163,7 +163,7 @@ func TestS3BucketProduction(t *testing.T) {
 	assert.NotNil(t, encryptionResult.ServerSideEncryptionConfiguration, "Encryption configuration should not be nil")
 	rules := encryptionResult.ServerSideEncryptionConfiguration.Rules
 	assert.NotEmpty(t, rules, "Encryption rules should not be empty")
-	
+
 	// Check encryption algorithm
 	if len(rules) > 0 && rules[0].ApplyServerSideEncryptionByDefault != nil {
 		assert.Equal(t, types.ServerSideEncryptionAwsKms, rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm, "Should use KMS encryption")
