@@ -17,6 +17,17 @@ This Terraform module creates an AWS S3 bucket that enforces Wizard.AI's organiz
 
 ```hcl
 module "my_bucket" {
+  source = "github.com/PeterZhang2015/terraform-code-challenge//wizardai_aws_s3_bucket?ref=v0.0.1"
+  
+  name        = "my-app-data"
+  environment = "development"
+}
+```
+
+### Local Development
+
+```hcl
+module "my_bucket" {
   source = "./wizardai_aws_s3_bucket"
   
   name        = "my-app-data"
@@ -28,7 +39,7 @@ module "my_bucket" {
 
 ```hcl
 module "my_secure_bucket" {
-  source = "./wizardai_aws_s3_bucket"
+  source = "github.com/PeterZhang2015/terraform-code-challenge//wizardai_aws_s3_bucket?ref=v0.0.1"
   
   name        = "sensitive-data"
   environment = "production"

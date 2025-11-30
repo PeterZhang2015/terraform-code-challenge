@@ -4,7 +4,7 @@ This directory contains comprehensive tests for the Wizard.AI S3 Bucket Terrafor
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.24.0 or later
 - AWS CLI configured with appropriate credentials
 - Terraform installed
 - AWS account with permissions to create S3 buckets, KMS keys, and IAM policies
@@ -177,7 +177,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.24.0'
       - name: Run tests
         run: |
           cd wizardai_aws_s3_bucket/test

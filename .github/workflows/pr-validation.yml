@@ -7,7 +7,7 @@ on:
 
 env:
   TF_VERSION: "1.6.0"
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.24.0"
 
 jobs:
   pr-checks:
@@ -252,10 +252,17 @@ jobs:
           exit 1
         fi
 
+    - name: Download Go dependencies
+      working-directory: ./wizardai_aws_s3_bucket/test
+      run: |
+        echo "� Downlioading Go dependencies..."
+        go mod download
+        go mod tidy
+
     - name: Check and format Go files
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
-        echo "🔍 Checking Go file formatting..."
+        echo "� Cheucking Go file formatting..."
         
         # Check if gofmt finds any issues
         unformatted=$(gofmt -l . 2>/dev/null || true)
@@ -283,7 +290,7 @@ jobs:
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
         go install honnef.co/go/tools/cmd/staticcheck@latest
-        staticcheck ./...
+        staticcheck -f stylish ./...
 
     - name: Check for TODO/FIXME comments
       run: |
