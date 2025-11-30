@@ -159,12 +159,18 @@ func TestS3BucketProduction(t *testing.T) {
 	encryptionResult, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
 		Bucket: aws.String(bucketID),
 	})
-	require.NoError(t, err)
-	assert.NotNil(t, encryptionResult.ServerSideEncryptionConfiguration)
+	require.NoError(t, err, "Failed to get bucket encryption")
+	assert.NotNil(t, encryptionResult.ServerSideEncryptionConfiguration, "Encryption configuration should not be nil")
 	rules := encryptionResult.ServerSideEncryptionConfiguration.Rules
-	assert.NotEmpty(t, rules)
-	assert.Equal(t, types.ServerSideEncryptionAwsKms, rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
-	assert.NotNil(t, rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID)
+	assert.NotEmpty(t, rules, "Encryption rules should not be empty")
+	
+	// Check encryption algorithm
+	if len(rules) > 0 && rules[0].ApplyServerSideEncryptionByDefault != nil {
+		assert.Equal(t, types.ServerSideEncryptionAwsKms, rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm, "Should use KMS encryption")
+		assert.NotNil(t, rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID, "KMS key ID should be set")
+	} else {
+		t.Fatal("Encryption rule or default encryption not configured properly")
+	}
 
 	// Test lifecycle configuration exists
 	lifecycleResult, err := s3Client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
