@@ -475,11 +475,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    defaults:
-      run:
-        working-directory: ./wizardai_aws_s3_bucket/examples/basic
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Check if Infracost is configured
       id: check_infracost
       run: |
@@ -488,10 +488,6 @@ jobs:
         else
           echo "enabled=false" >> $GITHUB_OUTPUT
         fi
-
-    - name: Checkout code
-      if: steps.check_infracost.outputs.enabled == 'true'
-      uses: actions/checkout@v4
 
     - name: Setup Terraform
       if: steps.check_infracost.outputs.enabled == 'true'
@@ -510,10 +506,12 @@ jobs:
 
     - name: Terraform Init
       if: steps.check_infracost.outputs.enabled == 'true'
+      working-directory: ./wizardai_aws_s3_bucket/examples/basic
       run: terraform init
 
     - name: Generate Terraform Plan for Infracost
       if: steps.check_infracost.outputs.enabled == 'true'
+      working-directory: ./wizardai_aws_s3_bucket/examples/basic
       run: |
         PR_NUMBER="${{ github.event.number }}"
         BUCKET_NAME="pr-test-${PR_NUMBER}"
@@ -532,6 +530,7 @@ jobs:
     - name: Generate Infracost breakdown
       if: steps.check_infracost.outputs.enabled == 'true'
       id: infracost
+      working-directory: ./wizardai_aws_s3_bucket/examples/basic
       run: |
         # Generate Infracost breakdown
         infracost breakdown --path=tfplan --format=json --out-file=infracost.json

@@ -12,7 +12,9 @@ The CI pipeline had multiple issues:
 
 ## Fixes Applied
 
-### 1. Fixed Workflow Syntax Error
+### 1. Fixed Workflow Syntax Errors
+
+#### Issue 1: Invalid secrets reference in job-level if
 The cost-estimation job had an invalid condition:
 ```yaml
 # BEFORE (Invalid - secrets not available in job-level if)
@@ -37,6 +39,35 @@ steps:
 ```
 
 This allows the job to run but skip steps when Infracost is not configured.
+
+#### Issue 2: Working directory before checkout
+The job had a default working directory set, but the first step tried to run before checkout:
+```yaml
+# BEFORE (Invalid - working directory doesn't exist yet)
+defaults:
+  run:
+    working-directory: ./wizardai_aws_s3_bucket/examples/basic
+steps:
+  - name: Check if Infracost is configured
+    run: ...  # Fails - directory doesn't exist
+  - name: Checkout code
+    uses: actions/checkout@v4
+```
+
+Changed to:
+```yaml
+# AFTER (Valid - checkout first, then set working directory per step)
+steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
+  
+  - name: Check if Infracost is configured
+    run: ...  # Works - no working directory needed
+  
+  - name: Terraform Init
+    working-directory: ./wizardai_aws_s3_bucket/examples/basic
+    run: terraform init
+```
 
 ### 2. Improved Error Visibility
 - Changed from redirecting output (`>`) to using `tee` command for real-time output
