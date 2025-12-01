@@ -37,6 +37,8 @@ jobs:
     - name: Run Checkov
       id: checkov
       run: |
+        set -o pipefail
+        
         # Install Checkov
         pip install checkov
         
@@ -57,6 +59,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        set -o pipefail
+        
         # Install tfsec with GitHub token to avoid rate limits
         export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
         curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
@@ -76,6 +80,8 @@ jobs:
     - name: Run Terrascan
       id: terrascan
       run: |
+        set -o pipefail
+        
         # Install Terrascan
         curl -L "$(curl -s https://api.github.com/repos/tenable/terrascan/releases/latest | grep -o -E "https://.+?_Linux_x86_64.tar.gz")" > terrascan.tar.gz
         tar -xf terrascan.tar.gz terrascan && rm terrascan.tar.gz
@@ -111,6 +117,8 @@ jobs:
     - name: Generate comprehensive security report
       id: security_report
       run: |
+        set -o pipefail
+        
         CHECKOV_ISSUES="${{ steps.checkov.outputs.checkov_issues }}"
         TFSEC_ISSUES="${{ steps.tfsec.outputs.tfsec_issues }}"
         TERRASCAN_ISSUES="${{ steps.terrascan.outputs.terrascan_issues }}"
