@@ -137,16 +137,20 @@ func TestS3BucketProduction(t *testing.T) {
 	bucketARN := terraform.Output(t, terraformOptions, "bucket_arn")
 	kmsKeyID := terraform.Output(t, terraformOptions, "kms_key_id")
 
+	t.Logf("Bucket ID: %s", bucketID)
+	t.Logf("Bucket ARN: %s", bucketARN)
+	t.Logf("KMS Key ID: %s", kmsKeyID)
+
 	// Verify bucket name follows naming convention
 	expectedBucketName := fmt.Sprintf("wizardai-%s-production", bucketName)
-	assert.Equal(t, expectedBucketName, bucketID)
+	assert.Equal(t, expectedBucketName, bucketID, "Bucket name should follow naming convention")
 
 	// Verify bucket ARN format
 	expectedARNPrefix := fmt.Sprintf("arn:aws:s3:::wizardai-%s-production", bucketName)
-	assert.Equal(t, expectedARNPrefix, bucketARN)
+	assert.Equal(t, expectedARNPrefix, bucketARN, "Bucket ARN should match expected format")
 
 	// Verify KMS key was created
-	assert.NotEmpty(t, kmsKeyID)
+	assert.NotEmpty(t, kmsKeyID, "KMS key ID should not be empty")
 
 	// Create AWS SDK v2 config and client
 	ctx := context.Background()
@@ -163,7 +167,7 @@ func TestS3BucketProduction(t *testing.T) {
 	assert.NotNil(t, encryptionResult.ServerSideEncryptionConfiguration, "Encryption configuration should not be nil")
 	rules := encryptionResult.ServerSideEncryptionConfiguration.Rules
 	assert.NotEmpty(t, rules, "Encryption rules should not be empty")
-
+	
 	// Check encryption algorithm
 	if len(rules) > 0 && rules[0].ApplyServerSideEncryptionByDefault != nil {
 		assert.Equal(t, types.ServerSideEncryptionAwsKms, rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm, "Should use KMS encryption")
