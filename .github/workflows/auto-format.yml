@@ -39,6 +39,8 @@ jobs:
     - name: Check for formatting issues
       id: check_formatting
       run: |
+        set -o pipefail
+        
         echo "🔍 Checking for formatting issues..."
         
         # Check Terraform formatting

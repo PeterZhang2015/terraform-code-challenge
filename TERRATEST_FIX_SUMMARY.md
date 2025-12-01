@@ -74,7 +74,7 @@ steps:
 - Increased error output from 50 to 200 lines in test failure reports
 - Added exit code capture and display in error messages
 
-### 3. Better Output Handling
+### 3. Better Output Handling and Error Propagation
 Changed from:
 ```bash
 make test-basic > output.txt 2>&1
@@ -91,6 +91,18 @@ This allows:
 - Full output saved to file for artifacts
 - Proper error propagation through pipes
 - Better debugging experience
+
+**Applied `set -o pipefail` to all pipeline steps:**
+- ✅ Terraform Format Check
+- ✅ Terraform Init
+- ✅ Terraform Validate
+- ✅ TFLint Analysis
+- ✅ Documentation Check
+- ✅ Terraform Plan
+- ✅ Terratest (all test suites)
+- ✅ Infracost breakdown
+
+This ensures that any command failure in a pipe will cause the entire step to fail, preventing silent errors.
 
 ### 4. Enhanced Error Messages
 Now includes:

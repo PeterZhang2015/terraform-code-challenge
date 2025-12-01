@@ -45,6 +45,8 @@ jobs:
 
     - name: Check for breaking changes
       run: |
+        set -o pipefail
+        
         # Check if there are any breaking changes in the module
         if git diff --name-only origin/master...HEAD | grep -E "(variables\.tf|outputs\.tf|main\.tf)"; then
           echo "::warning::Changes detected in core module files. Please ensure backward compatibility."
@@ -126,6 +128,8 @@ jobs:
 
     - name: Terraform Plan
       run: |
+        set -o pipefail
+        
         terraform plan -var="bucket_name=pr-test-$(echo ${{ github.event.number }} | tr '[:upper:]' '[:lower:]')" \
                       -var="environment=development" \
                       -out=tfplan
@@ -136,6 +140,8 @@ jobs:
     - name: Generate plan summary
       id: plan_summary
       run: |
+        set -o pipefail
+        
         # Create enhanced plan summary
         echo "## 📋 Terraform Plan (PR Validation)" > enhanced-plan-summary.md
         echo "" >> enhanced-plan-summary.md
@@ -247,6 +253,8 @@ jobs:
     - name: Run terraform fmt
       working-directory: ./wizardai_aws_s3_bucket
       run: |
+        set -o pipefail
+        
         if ! terraform fmt -check -recursive; then
           echo "::error::Terraform files are not formatted. Run 'terraform fmt -recursive' to fix."
           exit 1
@@ -262,6 +270,8 @@ jobs:
     - name: Check and format Go files
       working-directory: ./wizardai_aws_s3_bucket/test
       run: |
+        set -o pipefail
+        
         echo "� Cheucking Go file formatting..."
         
         # Check if gofmt finds any issues

@@ -47,6 +47,8 @@ jobs:
     - name: Terraform Init and Validate
       working-directory: ./wizardai_aws_s3_bucket
       run: |
+        set -o pipefail
+        
         terraform init
         terraform validate
 
@@ -61,6 +63,8 @@ jobs:
     - name: Calculate next version
       id: calc_version
       run: |
+        set -o pipefail
+        
         LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
         VERSION_TYPE="${{ github.event.inputs.version_type || 'patch' }}"
         
@@ -96,6 +100,8 @@ jobs:
     - name: Generate changelog
       id: changelog
       run: |
+        set -o pipefail
+        
         LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
         NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
         

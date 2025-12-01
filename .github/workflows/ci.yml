@@ -37,6 +37,8 @@ jobs:
     - name: Terraform Format Check
       id: fmt
       run: |
+        set -o pipefail
+        
         echo "## 📝 Terraform Format Check" > ../terraform-validation-results.md
         echo "" >> ../terraform-validation-results.md
         
@@ -61,6 +63,8 @@ jobs:
     - name: Terraform Init
       id: init
       run: |
+        set -o pipefail
+        
         echo "## 🚀 Terraform Init" >> ../terraform-validation-results.md
         echo "" >> ../terraform-validation-results.md
         
@@ -85,6 +89,8 @@ jobs:
     - name: Terraform Validate
       id: validate
       run: |
+        set -o pipefail
+        
         echo "## ✅ Terraform Validate" >> ../terraform-validation-results.md
         echo "" >> ../terraform-validation-results.md
         
@@ -117,6 +123,8 @@ jobs:
     - name: Run tflint
       id: tflint
       run: |
+        set -o pipefail
+        
         echo "## 🔍 TFLint Analysis" >> ../terraform-validation-results.md
         echo "" >> ../terraform-validation-results.md
         
@@ -189,6 +197,8 @@ jobs:
     - name: Check if documentation is up to date
       id: docs
       run: |
+        set -o pipefail
+        
         echo "## 📚 Documentation Check" > ../terraform-docs-results.md
         echo "" >> ../terraform-docs-results.md
         
@@ -404,6 +414,8 @@ jobs:
     - name: Terraform Plan
       id: plan
       run: |
+        set -o pipefail
+        
         # Generate unique bucket name for PR
         PR_NUMBER="${{ github.event.number }}"
         BUCKET_NAME="pr-test-${PR_NUMBER}"
@@ -532,6 +544,8 @@ jobs:
       id: infracost
       working-directory: ./wizardai_aws_s3_bucket/examples/basic
       run: |
+        set -o pipefail
+        
         # Generate Infracost breakdown
         infracost breakdown --path=tfplan --format=json --out-file=infracost.json
         
