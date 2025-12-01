@@ -117,6 +117,12 @@ jobs:
       with:
         tflint_version: latest
 
+    - name: Clear TFLint cache
+      run: |
+        echo "🧹 Clearing TFLint cache..."
+        rm -rf .tflint.d/ || true
+        echo "✅ Cache cleared"
+
     - name: Initialize tflint
       run: tflint --init
 

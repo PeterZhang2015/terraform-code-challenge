@@ -120,6 +120,21 @@ Added a verification step before tests run to check:
 
 This helps quickly identify environment issues before tests execute.
 
+### 6. TFLint Cache Clearing
+Added a cache clearing step before TFLint initialization:
+```yaml
+- name: Clear TFLint cache
+  run: |
+    echo "🧹 Clearing TFLint cache..."
+    rm -rf .tflint.d/ || true
+    echo "✅ Cache cleared"
+```
+
+This ensures:
+- Fresh analysis on every run
+- No stale warnings from previous runs
+- Accurate detection of unused variables and other issues
+
 ## Test Matrix
 
 The Terratest job runs three test suites in parallel:
