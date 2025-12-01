@@ -269,9 +269,28 @@ jobs:
     - name: Install dependencies
       run: make deps
 
+    - name: Verify environment
+      run: |
+        echo "Go version:"
+        go version
+        echo ""
+        echo "Terraform version:"
+        terraform version
+        echo ""
+        echo "AWS CLI version:"
+        aws --version
+        echo ""
+        echo "Current directory:"
+        pwd
+        echo ""
+        echo "AWS credentials configured:"
+        aws sts get-caller-identity || echo "AWS credentials not configured"
+
     - name: Run tests
       id: test
       run: |
+        set -o pipefail
+        
         # Create test results file
         echo "## 🧪 Terratest Results - ${{ matrix.test }}" > ../../terratest-${{ matrix.test }}-results.md
         echo "" >> ../../terratest-${{ matrix.test }}-results.md
@@ -279,17 +298,18 @@ jobs:
         # Run the appropriate test
         case "${{ matrix.test }}" in
           basic)
-            if make test-basic > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+            if make test-basic 2>&1 | tee ../../test-${{ matrix.test }}-output.txt; then
               echo "✅ **Basic tests passed** - All infrastructure tests successful" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=success" >> $GITHUB_OUTPUT
             else
-              echo "❌ **Basic tests failed** - Infrastructure tests encountered errors" >> ../../terratest-${{ matrix.test }}-results.md
+              TEST_EXIT_CODE=${PIPESTATUS[0]}
+              echo "❌ **Basic tests failed** - Infrastructure tests encountered errors (exit code: $TEST_EXIT_CODE)" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
-              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures (last 200 lines)</summary>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
-              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              tail -200 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
               echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=failure" >> $GITHUB_OUTPUT
@@ -297,17 +317,18 @@ jobs:
             fi
             ;;
           production)
-            if make test-production > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+            if make test-production 2>&1 | tee ../../test-${{ matrix.test }}-output.txt; then
               echo "✅ **Production tests passed** - Production-grade configuration validated" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=success" >> $GITHUB_OUTPUT
             else
-              echo "❌ **Production tests failed** - Production configuration issues found" >> ../../terratest-${{ matrix.test }}-results.md
+              TEST_EXIT_CODE=${PIPESTATUS[0]}
+              echo "❌ **Production tests failed** - Production configuration issues found (exit code: $TEST_EXIT_CODE)" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
-              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures (last 200 lines)</summary>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
-              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              tail -200 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
               echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=failure" >> $GITHUB_OUTPUT
@@ -315,17 +336,18 @@ jobs:
             fi
             ;;
           validation)
-            if make test-validation > ../../test-${{ matrix.test }}-output.txt 2>&1; then
+            if make test-validation 2>&1 | tee ../../test-${{ matrix.test }}-output.txt; then
               echo "✅ **Validation tests passed** - Input validation working correctly" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=success" >> $GITHUB_OUTPUT
             else
-              echo "❌ **Validation tests failed** - Input validation issues detected" >> ../../terratest-${{ matrix.test }}-results.md
+              TEST_EXIT_CODE=${PIPESTATUS[0]}
+              echo "❌ **Validation tests failed** - Input validation issues detected (exit code: $TEST_EXIT_CODE)" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo "<details>" >> ../../terratest-${{ matrix.test }}-results.md
-              echo "<summary>📄 Click to view test failures</summary>" >> ../../terratest-${{ matrix.test }}-results.md
+              echo "<summary>📄 Click to view test failures (last 200 lines)</summary>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "" >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
-              tail -50 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
+              tail -200 ../../test-${{ matrix.test }}-output.txt >> ../../terratest-${{ matrix.test }}-results.md
               echo '```' >> ../../terratest-${{ matrix.test }}-results.md
               echo "</details>" >> ../../terratest-${{ matrix.test }}-results.md
               echo "test_result=failure" >> $GITHUB_OUTPUT
@@ -449,7 +471,7 @@ jobs:
     name: Cost Estimation
     runs-on: ubuntu-latest
     needs: terraform-plan
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
     permissions:
       id-token: write
       contents: read
@@ -488,18 +510,12 @@ jobs:
           -out=tfplan
 
     - name: Setup Infracost
-      if: env.INFRACOST_API_KEY != ''
       uses: infracost/actions/setup@v2
       with:
         api-key: ${{ secrets.INFRACOST_API_KEY }}
-      env:
-        INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
 
     - name: Generate Infracost breakdown
-      if: env.INFRACOST_API_KEY != ''
       id: infracost
-      env:
-        INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
       run: |
         # Generate Infracost breakdown
         infracost breakdown --path=tfplan --format=json --out-file=infracost.json
