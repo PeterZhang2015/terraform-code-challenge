@@ -2,21 +2,48 @@
 
 ## Issues Identified
 
-The Terratest job in the CI pipeline was failing with limited error visibility:
+The CI pipeline had multiple issues:
 
-1. **Limited Error Output**: Only showing last 50 lines of test output wasn't enough to diagnose issues
-2. **No Real-time Output**: Tests were redirected to file without showing progress
-3. **Missing Exit Code**: Error messages didn't include the actual exit code from failed tests
-4. **Pipeline Error Handling**: Missing `pipefail` option could mask test failures in pipes
+1. **Workflow Syntax Error**: `secrets` context cannot be used in job-level `if` conditions
+2. **Limited Error Output**: Only showing last 50 lines of test output wasn't enough to diagnose issues
+3. **No Real-time Output**: Tests were redirected to file without showing progress
+4. **Missing Exit Code**: Error messages didn't include the actual exit code from failed tests
+5. **Pipeline Error Handling**: Missing `pipefail` option could mask test failures in pipes
 
 ## Fixes Applied
 
-### 1. Improved Error Visibility
+### 1. Fixed Workflow Syntax Error
+The cost-estimation job had an invalid condition:
+```yaml
+# BEFORE (Invalid - secrets not available in job-level if)
+if: github.event_name == 'pull_request' && secrets.INFRACOST_API_KEY != ''
+```
+
+Changed to:
+```yaml
+# AFTER (Valid - check secret in first step)
+if: github.event_name == 'pull_request'
+steps:
+  - name: Check if Infracost is configured
+    id: check_infracost
+    run: |
+      if [ -n "${{ secrets.INFRACOST_API_KEY }}" ]; then
+        echo "enabled=true" >> $GITHUB_OUTPUT
+      else
+        echo "enabled=false" >> $GITHUB_OUTPUT
+      fi
+  
+  # All subsequent steps check: if: steps.check_infracost.outputs.enabled == 'true'
+```
+
+This allows the job to run but skip steps when Infracost is not configured.
+
+### 2. Improved Error Visibility
 - Changed from redirecting output (`>`) to using `tee` command for real-time output
 - Increased error output from 50 to 200 lines in test failure reports
 - Added exit code capture and display in error messages
 
-### 2. Better Output Handling
+### 3. Better Output Handling
 Changed from:
 ```bash
 make test-basic > output.txt 2>&1
@@ -34,13 +61,13 @@ This allows:
 - Proper error propagation through pipes
 - Better debugging experience
 
-### 3. Enhanced Error Messages
+### 4. Enhanced Error Messages
 Now includes:
 - Exit code from failed tests
 - Last 200 lines of output (up from 50)
 - Clear indication of which test suite failed
 
-### 4. Environment Verification
+### 5. Environment Verification
 Added a verification step before tests run to check:
 - Go version (should be 1.24.0)
 - Terraform version (should be 1.6.0)
