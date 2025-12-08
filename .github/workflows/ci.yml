@@ -193,7 +193,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Generate terraform docs
-      uses: terraform-docs/gh-actions@v1.0.0
+      uses: terraform-docs/gh-actions@v1.4.1
       with:
         working-dir: ./wizardai_aws_s3_bucket
         output-file: README.md
