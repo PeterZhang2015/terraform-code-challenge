@@ -27,7 +27,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -190,7 +190,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Generate terraform docs
       uses: terraform-docs/gh-actions@v1.0.0
@@ -254,7 +254,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Go
       uses: actions/setup-go@v6
@@ -399,7 +399,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -496,7 +496,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Check if Infracost is configured
       id: check_infracost
@@ -611,7 +611,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Download all artifacts
       uses: actions/download-artifact@v6
