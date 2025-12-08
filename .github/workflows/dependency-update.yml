@@ -52,7 +52,7 @@ jobs:
         go list -json -deps ./... | docker run --rm -i sonatypecommunity/nancy:latest sleuth || true
 
     - name: Create PR for updates
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "chore(deps): update dependencies"
